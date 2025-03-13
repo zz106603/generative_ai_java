@@ -1,26 +1,40 @@
 package com.spring.ai;
 
 import io.github.cdimascio.dotenv.Dotenv;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
+import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
+import org.springframework.core.env.ConfigurableEnvironment;
 
-@EnableJpaAuditing  // JPA Auditing 활성화
+import java.util.HashMap;
+import java.util.Map;
+
+@Slf4j
+@ConfigurationPropertiesScan
 @SpringBootApplication
 public class AiApplication {
 
     public static void main(String[] args) {
-        // .env 파일 로드
-        Dotenv dotenv = Dotenv.load();
+        // 운영환경에서는 시스템 환경변수를 우선 사용하고, 로컬인 경우에만 .env 파일 로드
+        String profile = System.getenv("SPRING_PROFILES_ACTIVE");
 
-        // 환경 변수 값으로 시스템 속성 설정
-        System.setProperty("spring.datasource.username", dotenv.get("DB_USERNAME"));
-        System.setProperty("spring.datasource.password", dotenv.get("DB_PASSWORD"));
-        System.setProperty("spring.datasource.url", dotenv.get("DB_URL"));
+        SpringApplication app = new SpringApplication(AiApplication.class);
 
-        System.setProperty("spring.profiles.active", dotenv.get("SPRING_PROFILES_ACTIVE"));
+        if (profile == null || profile.isEmpty()) {
+            Dotenv dotenv = Dotenv.configure().ignoreIfMissing().load();
+            profile = dotenv.get("SPRING_PROFILES_ACTIVE");
 
-        SpringApplication.run(AiApplication.class, args);
+            app.addInitializers(context -> {
+                ConfigurableEnvironment env = context.getEnvironment();
+                Map<String, Object> envVars = new HashMap<>();
+                dotenv.entries().forEach(entry -> envVars.put(entry.getKey(), entry.getValue()));
+                env.getPropertySources().addFirst(new org.springframework.core.env.MapPropertySource("dotenvProperties", envVars));
+            });
+        }
+
+        System.setProperty("spring.profiles.active", profile);
+
+        app.run(args);
     }
-
 }
